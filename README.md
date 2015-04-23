@@ -1,6 +1,6 @@
 # MidiSignalTower
 シグナルタワーを改造し、MIDI音源化しました。3和音まで出せます。
-![Piano](https://raw.githubusercontent.com/lrks/MidiSignalTower/master/sample.gif)
+![Piano](https://raw.githubusercontent.com/lrks/MidiSignalTower/master/sample.gif "電子ピアノとの接続")
 
 ## ハードウェア
 以下のものを組み合わせて作っています。
@@ -14,8 +14,7 @@
   * シグナルタワー内部のブザーを鳴らすための発振回路をバイパスする
   * ランプを自由に制御できるようにする
 
-この上で、ランプ、YMZ294経由のブザー、YMZ294そのものをLPC1114で制御しています。
-GPIOが足りなくなりそうで、焦りました。
+この上で、ランプ、YMZ294経由のブザー、YMZ294そのものをLPC1114で制御しています。シフトレジスタをケチったら、GPIOが足りなくなりそうで焦りました。
 
 
 ## ソフトウェア
