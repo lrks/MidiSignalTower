@@ -31,6 +31,12 @@
 しかし、間隔が短いとMIDI受信で取りこぼしが起こるようになり、間隔を伸ばしたら、動作しなくなってしまいました。おしまい。
 
 
+## デモ
+YouTubeに上げました。
+
+[![シグナルタワーで「Hexagon Force」の演奏](http://img.youtube.com/vi/wn7WAOdVWSI/0.jpg)](http://www.youtube.com/watch?v=wn7WAOdVWSI)
+
+
 ## 今後の予定
 余裕があれば、今後はこんなことをします。
 
