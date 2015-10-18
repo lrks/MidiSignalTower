@@ -134,7 +134,12 @@ int main() {
     crash.mode(PullUp);
     crash.fall(&handle_crash);
     NVIC_SetPriority(EINT3_IRQn, 5);
+    
+    // KOREIRU?
     NVIC_SetPriority(TIMER_16_0_IRQn, 10);
+    NVIC_SetPriority(TIMER_16_1_IRQn, 11);
+    NVIC_SetPriority(TIMER_32_0_IRQn, 12);
+    NVIC_SetPriority(TIMER_32_1_IRQn, 13);
 
     // MIDI-IN
     fuwafuwatime.start();
