@@ -134,6 +134,7 @@ int main() {
     crash.mode(PullUp);
     crash.fall(&handle_crash);
     NVIC_SetPriority(EINT3_IRQn, 5);
+    NVIC_SetPriority(TIMER_16_0_IRQn, 10);
 
     // MIDI-IN
     fuwafuwatime.start();
