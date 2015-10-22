@@ -7,7 +7,7 @@
 #include "mbed.h"
 #include "ymz294.h"
 
-//#define DEBUG
+#define DEBUG
 #define UNDEF_NOTE  128
 #define UNDEF_CH    0xff
 #define STR_BUF_SIZE    32
@@ -54,7 +54,8 @@ int findCh(uint8_t midi_ch = UNDEF_CH, uint8_t note = UNDEF_NOTE);
 /*------------------------------------*/
 /*       Demo and KONOYONOOWARI       */
 /*------------------------------------*/
-void handle_crash();
+void resetHandler();
+void demoDeAttach();
 void demoHandler();
 
 
@@ -72,7 +73,7 @@ extern "C" void $Sub$$SystemInit (void)
     LPC_SYSCON->SYSOSCCTRL = 0x00;
     int i;
     for (i = 0; i < 200; i++) __NOP();
-
+    
     // select the PLL input
     LPC_SYSCON->SYSPLLCLKSEL  = 0x1;                // Select PLL Input source 0=IRC, 1=OSC
     LPC_SYSCON->SYSPLLCLKUEN  = 0x01;               // Update Clock Source
@@ -91,9 +92,9 @@ extern "C" void $Sub$$SystemInit (void)
     LPC_SYSCON->MAINCLKUEN    = 0x00;               // Toggle Update Register
     LPC_SYSCON->MAINCLKUEN    = 0x01;
     while (!(LPC_SYSCON->MAINCLKUEN & 0x01));       // Wait Until Updated
-
+    
     LPC_SYSCON->SYSAHBCLKDIV  = 0x00000001;
-
+ 
     // System clock to the IOCON needs to be enabled or
     // most of the I/O related peripherals won't work.
     LPC_SYSCON->SYSAHBCLKCTRL |= (1<<16);
@@ -103,17 +104,44 @@ extern "C" void $Sub$$SystemInit (void)
 /*------------------------------------*/
 /*          Main Application          */
 /*------------------------------------*/
+#ifdef DEBUG
+extern "C" {
+    void HardFault_Handler() {
+        sp.puts("!!!!Hard Fault!!!!\r\n");
+        while(1);
+    }
+    
+    void MemManage_Handler() {
+        sp.puts("!!!!MemManage Fault!!!!\n");
+        while(1);
+    }
+    
+    void BusFault_Handler() {
+        sp.puts("!!!!BusFault Fault!!!!\r\n");
+        while(1);
+    }
+    
+    void UsageFault_Handler() {
+        sp.puts("!!!!Usage Fault!!!!\r\n");
+        while(1);
+    }
+}
+#endif
+
 int main() {
     #define LAMP(r, y, g)   red=(r);yellow=(y);green=(g)
-
+    #ifdef DEBUG
+        SCB->SHCSR |= (1<<18)|(1<<17)|(1<<16);
+    #endif
+    
     // UART
     sp.format(8, RawSerial::None, 1);
     sp.baud(31250);
     #ifdef DEBUG
         sp.puts("Welcome to Underground\r\n");
     #endif
-    NVIC_SetPriority(UART_IRQn, 0);
-
+    //NVIC_SetPriority(UART_IRQn, 0);
+    
     // YMZ294 Hardware
     reset();
     ymz.setVolume(CHANNEL_A, 0xf);
@@ -122,28 +150,47 @@ int main() {
     ymz.setTone(CHANNEL_A, 1000);
     wait_ms(100);
     ymz.muffleTone(CHANNEL_A);
-
+    #ifdef DEBUG
+        sp.puts("YMZ294 Hardware OK\r\n");
+    #endif
+    
     // Lamp
     for (int i=0; i<4; i++) {
         LAMP(i < 2, i == 0 || i == 2, i == 0 || i == 3);
         wait(1);
     }
     reset();
-
+    #ifdef DEBUG
+        sp.puts("Lamp OK\r\n");
+    #endif
+    
     // KONOYONOOWARI
+    /*
     crash.mode(PullUp);
-    crash.fall(&handle_crash);
+    crash.fall(&resetHandler);
     NVIC_SetPriority(EINT3_IRQn, 5);
+    #ifdef DEBUG
+        sp.puts("Reset SW OK\r\n");
+    #endif
+    */
     
     // KOREIRU?
+    /*
     NVIC_SetPriority(TIMER_16_0_IRQn, 10);
     NVIC_SetPriority(TIMER_16_1_IRQn, 11);
     NVIC_SetPriority(TIMER_32_0_IRQn, 12);
     NVIC_SetPriority(TIMER_32_1_IRQn, 13);
-
+    #ifdef DEBUG
+        sp.puts("KOREIRU? OK\r\n");
+    #endif
+    */
+    
     // MIDI-IN
     fuwafuwatime.start();
     sp.attach(&uartHandler, RawSerial::RxIrq);
+    #ifdef DEBUG
+        sp.puts("MIDI Attach OK\r\n");
+    #endif
 }
 
 
@@ -159,35 +206,33 @@ void reset(bool full) {
             sp.puts("Light");
         sp.puts("\r\n");
     #endif
-
+    
     GLOBAL_STATE = 0;
     if (full) GLOBAL_RUNNING = 0x00;
     for (int i=0; i<3; i++) turnOff(i);
     fuwafuwatime.reset();
-
+    
     ymz.reset();
     ymz.setMixer(NONE, NONE, NONE, TONE_C, TONE_B, TONE_A);
     //ymz.setEnvelope(255.0, 0x0);
-
-    is_running_demo = false;
-    demotimer.detach();
-    demotimer.attach(demoHandler, DEMO_TIMEOUT);
+    
+    //demoDeAttach();
 }
 
 void turnOn(int ch, uint8_t midi_ch, uint8_t note) {
     bool on = (midi_ch != UNDEF_CH && note != UNDEF_NOTE);
-
+    
     if (ch == 0)
         red = on;
     else if (ch == 1)
         yellow = on;
     else if (ch == 2)
         green = on;
-
+    
     GLOBAL_SLOT[ch].ch = on ? midi_ch : UNDEF_CH;
     GLOBAL_SLOT[ch].note = on ? note : UNDEF_NOTE;
     GLOBAL_SLOT[ch].access = on ? fuwafuwatime.read() : 0.0;
-
+    
     if (on) {
         ymz.setNote((Ch)ch, note);
         #ifdef DEBUG
@@ -213,11 +258,11 @@ void uartHandler() {
     #define BUFSIZE 16
     uint8_t buf[BUFSIZE];
     static int idx = 0;
-
+    
     #ifdef DEBUG
         sp.puts("----\r\n");
     #endif
-
+        
     // Recieve
     uint8_t recv = sp.getc();
     #ifdef DEBUG
@@ -225,7 +270,7 @@ void uartHandler() {
         snprintf(str, STR_BUF_SIZE, "RECV: (0x%X, %d)\r\n", recv, GLOBAL_STATE);
         sp.puts(str);
     #endif
-
+        
     // Real-time message
     if ((recv & 0xf8) == 0xf8) {
         #ifdef DEBUG
@@ -233,13 +278,10 @@ void uartHandler() {
         #endif
         return;
     }
-
+    
     // Kick the dog
-    is_running_demo = false;
-    is_accept_demo = false;
-    demotimer.detach();
-    demotimer.attach(demoHandler, DEMO_TIMEOUT);
-
+    //demoDeAttach();
+        
     // Control
     if (GLOBAL_STATE == 0) {
         idx = 0;
@@ -250,7 +292,7 @@ void uartHandler() {
             stateTransition(GLOBAL_RUNNING, buf);
         }
     }
-
+    
     buf[idx++] = recv;
     if (idx >= BUFSIZE) idx = BUFSIZE - 1;
     stateTransition(recv, buf);
@@ -258,7 +300,7 @@ void uartHandler() {
 
 void stateTransition(uint8_t recv, uint8_t *buf) {
     uint8_t ev;
-
+    
     switch(GLOBAL_STATE) {
     case 0:
         ev = recv & 0xf0;
@@ -277,7 +319,7 @@ void stateTransition(uint8_t recv, uint8_t *buf) {
         GLOBAL_STATE = 0;
         break;
     }
-
+    
     #ifdef DEBUG
         char str[STR_BUF_SIZE];
         snprintf(str, STR_BUF_SIZE, "State Transition: %d\r\n", GLOBAL_STATE);
@@ -288,13 +330,13 @@ void stateTransition(uint8_t recv, uint8_t *buf) {
 void midiIn(uint8_t *body) {
     uint8_t msg = body[0];
     uint8_t ev = msg & 0xf0;
-
+    
     #ifdef DEBUG
         char str[STR_BUF_SIZE];
         snprintf(str, STR_BUF_SIZE, "\tMsg: 0x%X, Event: 0x%X\r\n", msg, ev);
         sp.puts(str);
     #endif
-
+    
     // Control Change
     if (ev == 0xb0) {
         uint8_t cc = body[1];
@@ -303,26 +345,26 @@ void midiIn(uint8_t *body) {
         }
         return;
     }
-
+    
     // NoteOn or NoteOff
     if (!(ev == 0x80 || ev == 0x90 || ev == 0xa0)) return;
-
+    
     uint8_t note = body[1];
     uint8_t velocity = body[2];
     if ((ev == 0x90 || ev == 0xa0) && velocity == 0x0) {
         msg &= 0x8f;
         ev = 0x80;
-
+        
         #ifdef DEBUG
             snprintf(str, STR_BUF_SIZE, "\t--> [Change]Msg: 0x%X\r\n", msg);
             sp.puts(str);
         #endif
     }
     uint8_t midi_ch = msg & 0x0f;
-
+    
     int ymz_ch = (ev == 0x90) ? findCh() : findCh(midi_ch, note);
     if (ymz_ch == -1) return;
-
+    
     switch(ev) {
     case 0x80:  // NoteOff
         turnOff(ymz_ch);
@@ -347,21 +389,54 @@ int findCh(uint8_t midi_ch, uint8_t note) {
 /*----------------------------------------------------------------------------*/
 /*                           Demo and KONOYONOOWARI                           */
 /*----------------------------------------------------------------------------*/
-void handle_crash() {
+void resetHandler() {
     reset();
+}
+
+void demoDeAttach() {
+    is_running_demo = false;
+    is_accept_demo = false;
+    #ifdef DEBUG
+        sp.puts("Call demoDeAttach()\r\n");
+    #endif
+    
+    demotimer.detach();
+    #ifdef DEBUG
+        sp.puts("\tDemo Detached\r\n");
+    #endif
+    
+    demotimer.attach(demoHandler, DEMO_TIMEOUT);
+    #ifdef DEBUG
+        sp.puts("\tDemo Attached\r\n");
+    #endif
 }
 
 void sound(int num);
 void sort(int num);
 void demoHandler() {
-    if (is_running_demo) return;
+    #ifdef DEBUG
+        sp.puts("Call demoHandler\r\n");
+    #endif
+    
+    if (is_running_demo) {
+        #ifdef DEBUG
+            sp.puts("Ignore demoHandler\r\n");
+        #endif
+        return;
+    }
     srand(fuwafuwatime.read_ms());
     reset(false);
-
+    
     is_accept_demo = true;
     is_running_demo = true;
-
+    
     int r = rand() % 4;
+    #ifdef DEBUG
+        char str[STR_BUF_SIZE];
+        snprintf(str, STR_BUF_SIZE, "r = %d\r\n", r);
+        sp.puts(str);
+    #endif
+    
     switch(r) {
     case 0: // Knight
     case 1: // KOKYOU
@@ -372,8 +447,13 @@ void demoHandler() {
         sort(r - 2);
         break;
     }
-
+    
     is_running_demo = false;
+    #ifdef DEBUG
+        char str2[STR_BUF_SIZE];
+        snprintf(str2, STR_BUF_SIZE, "demoEnd, f1=%d\r\n", is_accept_demo);
+        sp.puts(str2);
+    #endif
     if (is_accept_demo) demoHandler();
     reset(false);
 }
@@ -384,26 +464,26 @@ void sound(int num) {
         #include "midi/knight_note.txt"
         0xff
     };
-
+    
     float knight_duration[] = {
         #include "midi/knight_duration.txt"
         -1.0
     };
-
+    
     // Kokyou
     uint8_t kokyou_note[] = {
         #include "midi/kokyou_note.txt"
         0xff
     };
-
+    
     float kokyou_duration[] = {
         #include "midi/kokyou_duration.txt"
         -1.0
     };
-
+    
     uint8_t *note_p;
     float *duration_p;
-
+    
     switch (num) {
     case 0:
         note_p = knight_note;
@@ -415,7 +495,7 @@ void sound(int num) {
         duration_p = kokyou_duration;
         break;
     }
-
+    
     for (int i=0; (note_p[i >> 1] != 0xff && duration_p[i] != -1.0); i++) {
         if (!is_accept_demo) break;
         if (i % 2 == 0) {
@@ -426,7 +506,7 @@ void sound(int num) {
         } else {
             turnOff(0);
             yellow = 0;
-            green = 0;
+            green = 0;   
         }
         wait(duration_p[i]);
     }
@@ -443,14 +523,14 @@ void swap(uint8_t *n1, uint8_t *n2) {
     uint8_t tmp = *n1;
     *n1 = *n2;
     *n2 = tmp;
-
+    
     ymz.setVolume(CHANNEL_A, 0xf);
     turnOn(0, 0x0, *n1);
     yellow = 1;
     green = 1;
 
     wait_ms(100);
-
+    
     turnOff(0);
     yellow = 0;
     green = 0;
@@ -480,7 +560,7 @@ void quickSort(uint8_t *data, int left, int right) {
         if (l > r) break;
         swap(&data[l++], &data[r--]);
     }
-
+    
     if (left < r) quickSort(data, left, r);
     if (l < right) quickSort(data, l, right);
 }
@@ -489,7 +569,7 @@ void sort(int num) {
     #define QUICK_DATA_SIZE 50
     #define BOGO_DATA_SIZE  6
     uint8_t data[QUICK_DATA_SIZE];  // QUICK_DATA_SIZE >= BOGO_DATA_SIZE
-
+    
     switch(num) {
     case 0:
         for (int i=0; i<BOGO_DATA_SIZE; i++) data[i] = 50 + (rand() % 50);
@@ -502,4 +582,3 @@ void sort(int num) {
         break;
     }
 }
-
