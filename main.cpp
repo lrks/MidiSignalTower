@@ -11,7 +11,7 @@
 #define UNDEF_NOTE  128
 #define UNDEF_CH    0xff
 #define STR_BUF_SIZE    32
-#define DEMO_INTERVAL   300
+#define DEMO_INTERVAL   500
 
 struct Slot {
     uint8_t ch;
@@ -30,6 +30,7 @@ DigitalOut green(dp18);
 YMZ294 ymz(dp1, dp2, dp4, dp6, dp9, dp10, dp11, dp13, dp26, dp25, dp17);
 RawSerial sp(dp16, dp15); // tx, rx
 InterruptIn crash(dp28);
+Ticker dog;
 Timer fuwafuwatime;
 
 
@@ -54,6 +55,7 @@ int findCh(uint8_t midi_ch = UNDEF_CH, uint8_t note = UNDEF_NOTE);
 /*       Demo and KONOYONOOWARI       */
 /*------------------------------------*/
 void resetHandler();
+void watch();
 void demoHandler();
 
 /*------------------------------------*/
@@ -133,20 +135,16 @@ int main() {
     crash.fall(&resetHandler);
     NVIC_SetPriority(EINT3_IRQn, 5);
 
+    // Demo
+    dog.attach(&watch, DEMO_INTERVAL);
+    NVIC_SetPriority(TIMER_16_0_IRQn, 10);
+    NVIC_SetPriority(TIMER_16_1_IRQn, 11);
+    NVIC_SetPriority(TIMER_32_0_IRQn, 12);
+    NVIC_SetPriority(TIMER_32_1_IRQn, 13);
+
     // MIDI-IN
     fuwafuwatime.start();
     sp.attach(&uartHandler, RawSerial::RxIrq);
-
-    // Demo
-    while (1) {
-        wait(DEMO_INTERVAL);
-        if (fuwafuwatime.read() < DEMO_INTERVAL) continue;
-
-        GLOBAL_IS_ACCEPT_DEMO = true;
-        GLOBAL_IS_RUNNING_DEMO = true;
-        demoHandler();
-        if (GLOBAL_IS_RUNNING_DEMO) reset(false);
-    }
 }
 
 
@@ -354,10 +352,22 @@ void resetHandler() {
     reset();
 }
 
+void watch() {
+    if (fuwafuwatime.read() < DEMO_INTERVAL) return;
+    if (GLOBAL_IS_RUNNING_DEMO) return;
+
+    GLOBAL_IS_ACCEPT_DEMO = true;
+    GLOBAL_IS_RUNNING_DEMO = true;
+
+    demoHandler();
+    if (GLOBAL_IS_RUNNING_DEMO) reset(false);
+}
+
 void sound(int num);
 void sort(int num);
 void demoHandler() {
     if (!GLOBAL_IS_ACCEPT_DEMO) return;
+    wait(5);
 
     #ifdef DEBUG
         char str[STR_BUF_SIZE];
@@ -365,8 +375,6 @@ void demoHandler() {
     #endif
 
     srand(fuwafuwatime.read_us());
-    reset(false);
-
     int r = rand() % 4;
     #ifdef DEBUG
         snprintf(str, STR_BUF_SIZE, "r = %d\r\n", r);
@@ -444,6 +452,11 @@ void sound(int num) {
         }
         wait(duration_p[i]);
     }
+
+    // WASURETA
+    turnOff(0);
+    yellow = 0;
+    green = 0;
 }
 
 bool isSoted(uint8_t *data, int n) {
@@ -463,13 +476,13 @@ void swap(uint8_t *n1, uint8_t *n2) {
     yellow = 1;
     green = 1;
 
-    wait_ms(100);
+    wait_ms(150);
 
     turnOff(0);
     yellow = 0;
     green = 0;
 
-    wait_ms(100);
+    wait_ms(150);
 }
 
 void bogoSort(uint8_t *data, int n) {
@@ -500,8 +513,8 @@ void quickSort(uint8_t *data, int left, int right) {
 }
 
 void sort(int num) {
-    #define QUICK_DATA_SIZE 50
-    #define BOGO_DATA_SIZE  6
+    #define QUICK_DATA_SIZE 60
+    #define BOGO_DATA_SIZE  5
     uint8_t data[QUICK_DATA_SIZE];  // QUICK_DATA_SIZE >= BOGO_DATA_SIZE
 
     switch(num) {
