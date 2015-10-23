@@ -11,7 +11,7 @@
 #define UNDEF_NOTE  128
 #define UNDEF_CH    0xff
 #define STR_BUF_SIZE    32
-#define DEMO_INTERVAL   500
+#define DEMO_INTERVAL   600
 
 struct Slot {
     uint8_t ch;
@@ -23,6 +23,7 @@ int GLOBAL_STATE = 0;
 uint8_t GLOBAL_RUNNING = 0x00;
 bool GLOBAL_IS_ACCEPT_DEMO = false;
 bool GLOBAL_IS_RUNNING_DEMO = false;
+int GLOBAL_PREV_RAND = -1;
 
 DigitalOut red(dp27);
 DigitalOut yellow(dp5);
@@ -39,7 +40,7 @@ Timer fuwafuwatime;
 /*------------------------------------*/
 void reset(bool full=true);
 void turnOn(int ch, uint8_t midi_ch, uint8_t note);
-void turnOff(int ch);
+inline void turnOff(int ch);
 
 
 /*------------------------------------*/
@@ -171,7 +172,6 @@ void reset(bool full) {
 
     ymz.reset();
     ymz.setMixer(NONE, NONE, NONE, TONE_C, TONE_B, TONE_A);
-    //ymz.setEnvelope(255.0, 0x0);
 }
 
 void turnOn(int ch, uint8_t midi_ch, uint8_t note) {
@@ -286,7 +286,7 @@ void stateTransition(uint8_t recv, uint8_t *buf) {
 }
 
 
-void midiIn(uint8_t *body) {
+inline void midiIn(uint8_t *body) {
     uint8_t msg = body[0];
     uint8_t ev = msg & 0xf0;
 
@@ -353,7 +353,7 @@ void resetHandler() {
 }
 
 void watch() {
-    if (fuwafuwatime.read() < DEMO_INTERVAL) return;
+    if ((fuwafuwatime.read() * 0.99) < DEMO_INTERVAL) return;
     if (GLOBAL_IS_RUNNING_DEMO) return;
 
     GLOBAL_IS_ACCEPT_DEMO = true;
@@ -363,8 +363,8 @@ void watch() {
     if (GLOBAL_IS_RUNNING_DEMO) reset(false);
 }
 
-void sound(int num);
-void sort(int num);
+inline void sound(int num);
+inline void sort(int num);
 void demoHandler() {
     if (!GLOBAL_IS_ACCEPT_DEMO) return;
     wait(5);
@@ -374,22 +374,21 @@ void demoHandler() {
         sp.puts("[demoHandler]\r\n");
     #endif
 
+    int r;
     srand(fuwafuwatime.read_us());
-    int r = rand() % 4;
+    do {
+        r = rand() % 8;
+    } while (r == GLOBAL_PREV_RAND);
+
     #ifdef DEBUG
         snprintf(str, STR_BUF_SIZE, "r = %d\r\n", r);
         sp.puts(str);
     #endif
 
-    switch(r) {
-    case 0: // Knight
-    case 1: // KOKYOU
+    if (r < 7) {
         sound(r);
-        break;
-    case 2:
-    case 3:
-        sort(r - 2);
-        break;
+    } else {
+        sort(r - 7);
     }
 
     #ifdef DEBUG
@@ -423,19 +422,120 @@ void sound(int num) {
         -1.0
     };
 
+    // back
+    uint8_t back_note[] = {
+        #include "midi/back_note.txt"
+        0xff
+    };
+
+    float back_duration[] = {
+        #include "midi/back_duration.txt"
+        -1.0
+    };
+
+    // cant
+    uint8_t cant_note[] = {
+        #include "midi/cant_note.txt"
+        0xff
+    };
+
+    float cant_duration[] = {
+        #include "midi/cant_duration.txt"
+        -1.0
+    };
+
+    // club
+    uint8_t club_note[] = {
+        #include "midi/club_note.txt"
+        0xff
+    };
+
+    float club_duration[] = {
+        #include "midi/club_duration.txt"
+        -1.0
+    };
+
+    // dry
+    uint8_t dry_note[] = {
+        #include "midi/dry_note.txt"
+        0xff
+    };
+
+    float dry_duration[] = {
+        #include "midi/dry_duration.txt"
+        -1.0
+    };
+
+    // jumper
+    /*
+    uint8_t jumper_note[] = {
+        #include "midi/jumper_note.txt"
+        0xff
+    };
+
+    float jumper_duration[] = {
+        #include "midi/jumper_duration.txt"
+        -1.0
+    };
+
+    // polargiest
+    uint8_t polargiest_note[] = {
+        #include "midi/polargiest_note.txt"
+        0xff
+    };
+
+    float polargiest_duration[] = {
+        #include "midi/polargiest_duration.txt"
+        -1.0
+    };
+
+    // toe
+    uint8_t toe_note[] = {
+        #include "midi/toe_note.txt"
+        0xff
+    };
+
+    float toe_duration[] = {
+        #include "midi/toe_duration.txt"
+        -1.0
+    };
+    */
+
+    // xstep
+    uint8_t xstep_note[] = {
+        #include "midi/xstep_note.txt"
+        0xff
+    };
+
+    float xstep_duration[] = {
+        #include "midi/xstep_duration.txt"
+        -1.0
+    };
+
     uint8_t *note_p;
     float *duration_p;
 
-    switch (num) {
-    case 0:
+    if (num == 0) {
         note_p = knight_note;
         duration_p = knight_duration;
-        break;
-    case 1:
-    default:
+    } else if (num == 1) {
         note_p = kokyou_note;
         duration_p = kokyou_duration;
-        break;
+    } else if (num == 2) {
+        note_p = back_note;
+        duration_p = back_duration;
+    } else if (num == 3) {
+        note_p = cant_note;
+        duration_p = cant_duration;
+    } else if (num == 4) {
+        note_p = club_note;
+        duration_p = club_duration;
+    } else if (num == 5) {
+        note_p = dry_note;
+        duration_p = dry_duration;
+    } else {
+        note_p = xstep_note;
+        duration_p = xstep_duration;
     }
 
     for (int i=0; (note_p[i >> 1] != 0xff && duration_p[i] != -1.0); i++) {
@@ -513,7 +613,7 @@ void quickSort(uint8_t *data, int left, int right) {
 }
 
 void sort(int num) {
-    #define QUICK_DATA_SIZE 60
+    #define QUICK_DATA_SIZE 100
     #define BOGO_DATA_SIZE  5
     uint8_t data[QUICK_DATA_SIZE];  // QUICK_DATA_SIZE >= BOGO_DATA_SIZE
 
