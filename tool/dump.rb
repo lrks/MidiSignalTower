@@ -11,6 +11,7 @@ class Beep
 
   def initialize(file, mbed_flg)
     @is_mbed = mbed_flg
+    @prev = -1
 
     @seq = MIDI::Sequence.new()
     File.open(ARGV[0], 'rb') do |file|
@@ -44,12 +45,21 @@ class Beep
 
   private
   def suyasuya(second)
-	puts "Sduration: #{second},"
+    return if @prev == -1
+    if @prev == 0
+      puts "Eduration"
+    end
+    @prev = 0
+    puts "Sduration: #{second},"
   end
 
   def beep(note, second)
-	puts "note: #{note},"
-	puts "Bduration: #{second},"
+    if @prev == 1
+      suyasuya(0.00)
+    end
+    @prev = 1
+    puts "note: #{note},"
+    puts "Bduration: #{second},"
   end
 end
 
